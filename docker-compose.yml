@@ -1,0 +1,57 @@
+networks:
+  openobd-net:
+    ipam:
+      config:
+        - subnet: "10.0.0.0/24"
+
+services:
+  launcher:
+    container_name: "openOBD-function-launcher"
+    image: "openobd-example/launcher"
+    depends_on:
+      - executor-python
+    env_file: ./env
+    environment:
+      OPENOBD_EXECUTOR_HOST: "http://10.0.0.53:8080" # Should refer to the ip and port of the executor container
+      FUNCTIONS_FILE_LOCATION: "/opt/project/function-launcher-index.json" # Location of the index file containing the available openOBD functions the launcher will register
+#      LOG_OUTPUT_LEVEL: "DEBUG"
+    restart: unless-stopped
+    volumes:
+      - ${OPENOBD_LAUNCHER_LOCATION}:/opt/project/function-launcher # The executable jar "function_launcher.jar" should be in this folder (so the target directory)
+      - ${OPENOBD_LAUNCHER_FUNCTIONS_INDEX}:/opt/project/function-launcher-index.json # See: environment.FUNCTIONS_FILE_LOCATION
+    entrypoint:
+      - "./entrypoint.sh"
+    networks:
+      openobd-net:
+        ipv4_address: 10.0.0.52
+
+
+  executor-python:
+    container_name: "openOBD-function-executor-python"
+    image: "openobd-example/executor"
+    ports:
+      - 9153:8080
+    env_file: ./env
+    environment:
+      STORAGE_DRIVER: "local" # Will set the executor to use local storage instead of something like S3
+      EXECUTOR_RUN_DIRECTORY: "/tmp/executor" # Directory inside the image used as context for the executor
+      FUNCTIONS_LOCATION: "/opt/project/executor-functions"  # Directory containing the actual function implementations, contained in a compressed archive
+      LOGS_LOCATION: "/opt/project/executor-logs" # Directory where a function log will be written to after a functions has been executed
+    restart: unless-stopped
+    volumes:
+      - ${OPENOBD_EXECUTOR_LOCATION}:/opt/project/executor # The server.py should be in this folder
+      - ${OPENOBD_EXECUTOR_FUNCTIONS_LOCATION}:/opt/project/executor-functions # See: environment.FUNCTIONS_LOCATION
+      - ${OPENOBD_EXECUTOR_LOGS_LOCATION}:/opt/project/executor-logs # See: environment.LOGS_LOCATION
+      - ${OPENOBD_EXECUTOR_RUNTIME_LOCATION}:/tmp/executor # See: environment.OPENOBD_EXECUTOR_RUNTIME_LOCATION
+    entrypoint:
+      - "uvicorn"
+      - "server:api"
+      - "--host"
+      - "0.0.0.0"
+      - "--port"
+      - "8080"
+#      - "--log-level" # https://www.uvicorn.org/settings/#logging
+#      - "trace"
+    networks:
+      openobd-net:
+        ipv4_address: 10.0.0.53
