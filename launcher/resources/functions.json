@@ -1,0 +1,13 @@
+{
+  "<CHANGE_ME_FOR_A_FUNCTION_UUID>": {
+    "signature": "<CHANGE_ME_FOR_A_FUNCTION_SIGNATURE>",
+    "name": "OPENOBD:EXAMPLE:01",
+    "description": "Example function",
+    "version": "0.1",
+    "author": "Jifeline Networks",
+    "executor": "python",
+    "runtime": "1",
+    "mode": 0,
+    "mode_string": "UNDEFINED"
+  }
+}
