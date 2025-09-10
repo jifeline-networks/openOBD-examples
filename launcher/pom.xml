@@ -7,6 +7,15 @@
   <artifactId>function_launcher</artifactId>
   <version>0.1</version>
 
+  <repositories>
+    <!-- force to first look at central maven repository (speeds up pipelines) -->
+    <repository>
+      <id>central-first</id>
+      <name>First lookup at central repo</name>
+      <url>https://repo.maven.apache.org/maven2</url>
+    </repository>
+  </repositories>
+
   <properties>
     <maven.compiler.source>21</maven.compiler.source>
     <maven.compiler.target>21</maven.compiler.target>
@@ -14,7 +23,7 @@
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.release>17</maven.compiler.release>
 
-    <openOBD.version>1.18.6rc</openOBD.version>
+    <openOBD.version>1.24.1</openOBD.version>
     <grpc.version>1.65.0</grpc.version>
     <protobuf.version>3.25.5</protobuf.version>
     <junit.version>5.11.0</junit.version>
@@ -36,8 +45,8 @@
   <dependencies>
     <dependency>
       <groupId>com.jifeline</groupId>
-      <artifactId>OpenOBD</artifactId>
-      <version>1.18.6rc</version>
+      <artifactId>libOpenOBD</artifactId>
+      <version>${openOBD.version}</version>
     </dependency>
 
     <dependency>

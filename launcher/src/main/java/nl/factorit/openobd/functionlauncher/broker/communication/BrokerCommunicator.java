@@ -67,8 +67,6 @@ public class BrokerCommunicator {
      * @throws BrokerStream.StreamEndingException  Thrown when a response was read with an already closed stream
      */
     public Optional<FunctionUpdate> receive() throws BrokerStream.StreamEndingException {
-        logger.debug("Looking for updates");
-
         return this.incomingStream.receive();
     }
 }

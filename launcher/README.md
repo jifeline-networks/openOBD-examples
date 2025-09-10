@@ -39,6 +39,5 @@ The following list describes the environment variables available to the _launche
 | `LOG_OUTPUT_LEVEL`              | NO       | INFO             | Will result in more log output (see `Logger::Level`)                                           |
 | `OPENOBD_CLUSTER_ID`            | NO       | 001              | The cluster used to authorize a Partner through the Partner API. `001` refers to Europe        |
 | `OPENOBD_GRPC_HOST`             | NO       | grpc.openobd.com | The hostname of the openOBD Function Broker                                                    |
-| `OPENOBD_PARTNER_API_KEY`       | YES      |                  | A Partner's API key                                                                            |
 | `OPENOBD_PARTNER_CLIENT_ID`     | YES      |                  | A Partner's API credentials id                                                                 |
 | `OPENOBD_PARTNER_CLIENT_SECRET` | YES      |                  | A Partner's API credentials secret                                                             |

@@ -28,10 +28,13 @@ public class ExecutorClient {
         this.executorHost = System.getenv("OPENOBD_EXECUTOR_HOST");
     }
 
-    public FunctionResponse startFunction(FunctionAndSessionInfo functionAndSessionInfo) throws FunctionNotStartedException{
+    public FunctionResponse startFunction(FunctionAndSessionInfo functionAndSessionInfo) throws FunctionNotStartedException, FunctionStartedWithException {
+        HttpURLConnection executorConnection;
+        OutputStream output;
+
         try {
             logger.debug("Starting function %s on %s:%s".formatted(
-                    functionAndSessionInfo.function.registration.getId(),
+                    functionAndSessionInfo.function.registration.getDetails().getId(),
                     functionAndSessionInfo.getFunctionExecutor(),
                     functionAndSessionInfo.getRuntimeId()
             ));
@@ -44,11 +47,11 @@ public class ExecutorClient {
                     this.executorHost,
                     functionAndSessionInfo.getFunctionExecutor(),
                     "function",
-                    functionAndSessionInfo.function.registration.getId()
+                    functionAndSessionInfo.function.registration.getDetails().getId()
                 )
             );
 
-            HttpURLConnection executorConnection = (HttpURLConnection) url.openConnection();
+            executorConnection = (HttpURLConnection) url.openConnection();
             executorConnection.setReadTimeout(EXECUTOR_HTTP_TIMEOUT);
             executorConnection.setConnectTimeout(EXECUTOR_HTTP_TIMEOUT);
             executorConnection.setDoInput(true);
@@ -58,7 +61,12 @@ public class ExecutorClient {
             executorConnection.setRequestProperty("Content-Type", "application/json");
             executorConnection.setRequestProperty("RuntimeId", functionAndSessionInfo.getRuntimeId());
 
-            OutputStream output = executorConnection.getOutputStream();
+            output = executorConnection.getOutputStream();
+        } catch (IOException e) {
+            throw new FunctionNotStartedException(e);
+        }
+
+        try {
             output.write(functionAndSessionInfo.toRequest().toJson().getBytes());
 
             BufferedReader reader = new BufferedReader(
@@ -77,9 +85,9 @@ public class ExecutorClient {
 
             logger.debug("Got %s as response".formatted(response.toString()));
 
-            return null;//FunctionResponse.fromJson(response.toString());
-        } catch (IOException e) {
-            throw new FunctionNotStartedException(e);
+            return FunctionResponse.fromJson(response.toString());
+        } catch (Exception e) {
+            throw new FunctionStartedWithException(e);
         }
     }
 
@@ -97,7 +105,7 @@ public class ExecutorClient {
 
         public FunctionRequest toRequest() {
             return new FunctionRequest(
-                    this.function.registration.getId(),
+                    this.function.registration.getDetails().getId(),
                     Base64.getEncoder().encodeToString(this.session.toByteArray())
             );
         }
@@ -113,7 +121,7 @@ public class ExecutorClient {
         }
     }
 
-    public static class FunctionResponse extends HashMap<String, String> {
+    public static class FunctionResponse extends HashMap<String, Object> {
         public static FunctionResponse fromJson(String json) throws JsonProcessingException {
             return new ObjectMapper().readValue(json, FunctionResponse.class);
         }
@@ -122,6 +130,12 @@ public class ExecutorClient {
     public static class FunctionNotStartedException extends RuntimeException {
         public FunctionNotStartedException(Throwable cause) {
             super("Function could not be started due to a %s: %s".formatted(cause.getClass(), cause.getMessage()), cause);
+        }
+    }
+
+    public static class FunctionStartedWithException extends RuntimeException {
+        public FunctionStartedWithException(Throwable cause) {
+            super("Function was started but resulted in an exception %s: %s".formatted(cause.getClass(), cause.getMessage()), cause);
         }
     }
 }

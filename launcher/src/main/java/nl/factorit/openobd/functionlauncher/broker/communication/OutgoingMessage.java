@@ -56,7 +56,7 @@ public abstract class OutgoingMessage<T> {
     public static class FunctionRegistrationMessage extends OutgoingMessage<FunctionRegistration> {
         public FunctionRegistrationMessage(FunctionRegistration message) {
             this.message = message;
-            this.messageDescription = "Registration message for %s, %s".formatted(this.message.getId(), this.message.getState());
+            this.messageDescription = "Registration message for %s, %s".formatted(this.message.getDetails().getId(), this.message.getState());
         }
 
         @Override

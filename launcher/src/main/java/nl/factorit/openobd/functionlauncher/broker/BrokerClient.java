@@ -69,7 +69,6 @@ public class BrokerClient {
         Authenticate auth = Authenticate.newBuilder()
                 .setClientId(System.getenv("OPENOBD_PARTNER_CLIENT_ID"))
                 .setClientSecret(System.getenv("OPENOBD_PARTNER_CLIENT_SECRET"))
-                .setApiKey(System.getenv("OPENOBD_PARTNER_API_KEY"))
                 .setClusterId(clusterId)
                 .build();
 

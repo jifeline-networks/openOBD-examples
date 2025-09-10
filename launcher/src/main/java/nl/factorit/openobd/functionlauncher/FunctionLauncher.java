@@ -1,10 +1,10 @@
 package nl.factorit.openobd.functionlauncher;
 
+import com.jifeline.OpenOBD.Function.Messages.FunctionDetails;
 import com.jifeline.OpenOBD.FunctionBroker.Messages.*;
 import nl.factorit.openobd.functionlauncher.broker.BrokerClient;
 import nl.factorit.openobd.functionlauncher.broker.communication.BrokerStream;
 import nl.factorit.openobd.functionlauncher.broker.communication.OutgoingMessage;
-import java.util.logging.*;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -55,12 +55,14 @@ public class FunctionLauncher {
         // Register all the functions the parser retrieved and set them to ONLINE
         new FunctionsParser().getFunctions().forEach((functionId, functionDescription) -> {
             FunctionRegistration registration = FunctionRegistration.newBuilder()
-                    .setId(functionId.toString())
-                    .setName(functionDescription.name())
+                    .setDetails(FunctionDetails.newBuilder()
+                            .setId(functionId.toString())
+                            .setName(functionDescription.name())
+                            .setVersion(functionDescription.version())
+                            .setDescription(functionDescription.description())
+                            .build())
                     .setSignature(functionDescription.signature())
                     .setState(FunctionRegistrationState.FUNCTION_REGISTRATION_STATE_ONLINE)
-                    .setVersion(functionDescription.version())
-                    .setDescription(functionDescription.description())
                     .build();
 
             brokerClient.send(new OutgoingMessage.FunctionRegistrationMessage(registration));
@@ -79,7 +81,7 @@ public class FunctionLauncher {
      * Main loop that will start listening for messages send by the Function Broker and act accordingly.
      */
     public void run() throws InterruptedException {
-        logger.info("Listening for function calls");
+        logger.info("Listening for requests...");
 
         int tries = 0;
 
@@ -97,52 +99,9 @@ public class FunctionLauncher {
 
                 FunctionUpdate update = request.get();
 
-                if (FunctionUpdateType.FUNCTION_UPDATE_TYPE_REQUEST != update.getType()) {
-                    logger.debug("Ignoring %s update: %s".formatted(update.getType(), update.getResponse()));
-                    continue;
-                }
-
-                if (update.hasFunctionRegistration()) {
-                    FunctionCall call = update.getFunctionCall();
-
-                    logger.debug("%s: Got a REQUEST".formatted(call.getId()));
-
-                    Function function = this.functions.get(call.getId());
-
-                    if (null == function) {
-                        throw new UnknownFunctionException(call.getId());
-                    }
-
-                    // Start the requested function
-                    this.executorClient.startFunction(
-                            new ExecutorClient.FunctionAndSessionInfo(
-                                    function,
-                                    call.getSessionInfo()
-                            )
-                    );
-
-                    // If there wasn't any error we send a start success to the broker
-                    this.brokerClient.send(
-                            new OutgoingMessage.FunctionCallResponse(
-                                    call,
-                                    FunctionUpdateResponse.FUNCTION_UPDATE_SUCCESS,
-                                    "Function %s has been started successfully".formatted(call.getId())
-                            )
-                    );
-
-                } else if (update.hasFunctionBrokerToken()) {
-                    logger.debug("Token update, refreshing token");
-                    // The ping possibly contains an updated token (meaning our current one could expire soon) so we'll
-                    // always override it
-                    this.brokerClient.updateToken(update.getFunctionBrokerToken());
-
-                    // And we send a ping back to keep the gRPC stream from being closed by the ALB
-                    this.brokerClient.send(
-                            new OutgoingMessage.FunctionBrokerTokenMessage(update.getFunctionBrokerToken())
-                    );
-                } else if (update.hasFunctionBrokerReconnect()) {
-                    logger.debug("Broker going down, initiating reconnect");
-                    throw new BrokerReconnectException(update.getFunctionBrokerReconnect().getSecondsUntilDisconnect());
+                switch(update.getType()) {
+                    case FUNCTION_UPDATE_TYPE_REQUEST -> this.handleRequest(update);
+                    case FUNCTION_UPDATE_TYPE_RESPONSE -> this.handleResponse(update);
                 }
 
                 tries = 0; // Reset the recover stream counter as we have successfully listened for a request
@@ -190,6 +149,15 @@ public class FunctionLauncher {
                         )
                     );
                 });
+            } catch (ExecutorClient.FunctionStartedWithException e) {
+                request.ifPresent(update ->
+                    brokerClient.send(
+                        new OutgoingMessage.FunctionCallResponse(
+                            update.getFunctionCall(),
+                            FunctionUpdateResponse.FUNCTION_UPDATE_SUCCESS,
+                            "Function %s was started, but had exceptions".formatted(update.getFunctionCall().getId())
+                    )
+                ));
             }
         }
 
@@ -199,6 +167,65 @@ public class FunctionLauncher {
 
         logger.info("Stopped listening for updates");
     }
+
+    private void handleRequest(FunctionUpdate update) throws BrokerReconnectException {
+        if (update.hasFunctionCall()) {
+            FunctionCall call = update.getFunctionCall();
+
+            logger.debug("%s: Got a REQUEST".formatted(call.getId()));
+
+            Function function = this.functions.get(call.getId());
+
+            if (null == function) {
+                throw new UnknownFunctionException(call.getId());
+            }
+
+            // Start the requested function
+            this.executorClient.startFunction(
+                    new ExecutorClient.FunctionAndSessionInfo(
+                            function,
+                            call.getSessionInfo()
+                    )
+            );
+
+            // If there wasn't any error we send a start success to the broker
+            this.brokerClient.send(
+                    new OutgoingMessage.FunctionCallResponse(
+                            call,
+                            FunctionUpdateResponse.FUNCTION_UPDATE_SUCCESS,
+                            "Function %s has been started successfully".formatted(call.getId())
+                    )
+            );
+
+        } else if (update.hasFunctionBrokerToken()) {
+            logger.debug("Token update, refreshing token");
+            // The ping possibly contains an updated token (meaning our current one could expire soon) so we'll
+            // always override it
+            this.brokerClient.updateToken(update.getFunctionBrokerToken());
+
+            // And we send a ping back to keep the gRPC stream from being closed by the ALB
+            this.brokerClient.send(
+                    new OutgoingMessage.FunctionBrokerTokenMessage(update.getFunctionBrokerToken())
+            );
+        } else if (update.hasFunctionBrokerReconnect()) {
+            logger.debug("Broker going down, initiating reconnect");
+            throw new BrokerReconnectException(update.getFunctionBrokerReconnect().getSecondsUntilDisconnect());
+        }
+    }
+
+    private void handleResponse(FunctionUpdate update) throws BrokerReconnectException {
+        if (update.hasFunctionRegistration()) {
+            if (!FunctionUpdateResponse.FUNCTION_UPDATE_SUCCESS.equals(update.getResponse())) {
+                logger.error("Could not register function %s:%s, reason: %s".formatted(
+                        update.getFunctionRegistration().getDetails().getName(),
+                        update.getFunctionRegistration().getDetails().getId(),
+                        update.getResponseDescription()));
+            }
+        } else {
+            logger.debug("Ignoring %s update: %s - %s".formatted(update.getType(), update.getResponse(), update.getResponseDescription()));
+        }
+    }
+
 
     /**
      * Gracefully stop the Function Broker communications by setting all the served openOBD function to OFFLINE and closing
