@@ -10,9 +10,8 @@ executor_image_name := "openobd-example/executor"
 #=================================================TARGETS==============================================================#
 
 build-example-function:
-	@cd $(mkfile_dir)/functions
-	@tar -cf example_function.tar.xz example_function
-	@echo "You should rename the $(pwd)/example_function.tar.xz to use you own registered function uuid"
+	@echo "You should have renamed the $$(pwd)/example_* folder to use you own registered function uuid"
+	@cd $(mkfile_dir)/functions && find -maxdepth 1 -mindepth 1 -type d -exec tar -czf {}.tar.xz {} \;
 
 build-launcher-image:
 	@cd "$(mkfile_dir)/launcher" && docker build -t "$(launcher_image_name)" .
